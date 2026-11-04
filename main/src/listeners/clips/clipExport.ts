@@ -26,6 +26,7 @@ import Constants from '../../common/constants';
 import MainApplication from '../../application';
 import {PathManager} from '../../services';
 import Project from '../../common/project';
+import {verifyAudioAssetPath} from '../../common/project/assetSecurity';
 import {executeRenderer, getAmplitudeAndTimingArrays} from '../../hapticsSdk';
 // @oss-disable
 import {
@@ -345,8 +346,9 @@ export function exportClips(): void {
               localFileName = `${basename}${suffix}${extension}`;
             }
 
-            if (fs.existsSync(clip.audioAsset.path)) {
-              zip.addLocalFile(clip.audioAsset.path, '', localFileName);
+            const assetPath = await verifyAudioAssetPath(clip.audioAsset.path);
+            if (assetPath) {
+              zip.addLocalFile(assetPath, '', localFileName);
             }
 
             clipAssets.push(localFileName);
@@ -401,8 +403,11 @@ export function prepareExternalAuditioning(): void {
       const hapticName = `${id}-haptic.wav`;
       const audioName = `${id}-audio.wav`;
       let hasAudio = false;
-      if (clip.audioAsset && clip.audioAsset.path) {
-        fs.copyFileSync(clip.audioAsset.path, path.join(mixesPath, audioName));
+      const audioPath = clip.audioAsset?.path
+        ? await verifyAudioAssetPath(clip.audioAsset.path)
+        : undefined;
+      if (audioPath) {
+        fs.copyFileSync(audioPath, path.join(mixesPath, audioName));
         hasAudio = true;
       }
       const finalFilePath = path.join(mixesPath, hapticName);

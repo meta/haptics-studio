@@ -17,6 +17,7 @@ import {
   set as lodashSet,
   unset as lodashUnset,
   isEmpty,
+  isNil,
 } from 'lodash';
 import path from 'path';
 import rimraf from 'rimraf';
@@ -78,6 +79,8 @@ export interface ProjectMetadata {
   openedAt?: number;
   updatedAt?: number;
   clipsCount?: number;
+  // mtime of the project file when it was last saved by Studio or allowed by the user
+  trustedMtime?: number;
 
   // Fields reserved for samples and tutorials
   icon?: string;
@@ -389,6 +392,35 @@ export default class Configs {
       recentProjects[0].clipsCount = Project.instance.getClips().length;
     }
     this.set('recentProjects', recentProjects);
+  }
+
+  /**
+   * Marks a recent project as trusted at the current modification time of its file
+   * @param {string} projectFile - The project file
+   */
+  public trustRecentProject(projectFile: string): void {
+    const project = this.configs.recentProjects.find(
+      p => p.projectFile === projectFile,
+    );
+    if (!project || !fs.existsSync(projectFile)) return;
+    project.trustedMtime = fs.statSync(projectFile).mtimeMs;
+    this.save();
+  }
+
+  /**
+   * Checks if a project file is a trusted recent project that has not been modified since
+   * @param {string} projectFile - The project file
+   * @return {boolean} True if the project is trusted
+   */
+  public isTrustedRecentProject(projectFile: string): boolean {
+    const project = this.configs.recentProjects.find(
+      p => p.projectFile === projectFile,
+    );
+    const trustedMtime = project?.trustedMtime;
+    if (isNil(trustedMtime) || !fs.existsSync(projectFile)) {
+      return false;
+    }
+    return fs.statSync(projectFile).mtimeMs === trustedMtime;
   }
 
   /**

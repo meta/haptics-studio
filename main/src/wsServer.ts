@@ -17,6 +17,7 @@ import {hapticDataToSplitAhap} from './hapticsSdk';
 import Logger from './common/logger';
 import Constants from './common/constants';
 import Project, {Clip} from './common/project';
+import {verifyAudioAssetPath} from './common/project/assetSecurity';
 import {setCurrentClip} from './actions/project';
 import MainApplication from './application';
 import Configs from './common/configs';
@@ -546,20 +547,18 @@ export default class WSServer {
     client.on('get_audio', async (args: {clipId: string; binary?: boolean}) => {
       const {clipId = '', binary} = args;
       const clip = Project.instance.getClipById(clipId);
-      const audioAsset = clip?.audioAsset;
-      if (
-        clip &&
-        audioAsset &&
-        audioAsset.path &&
-        fs.existsSync(audioAsset.path)
-      ) {
+      const assetPath = clip?.audioAsset?.path;
+      const audioPath = assetPath
+        ? await verifyAudioAssetPath(assetPath)
+        : undefined;
+      if (clip && audioPath) {
         if (binary) {
-          const audio = await fs.promises.readFile(audioAsset.path);
+          const audio = await fs.promises.readFile(audioPath);
           this.sendToRoom('get_audio_binary', {audio, clipId: clip?.clipId});
         } else {
           // Legacy support for older companion app versions
-          const audioBuffer = await fs.promises.readFile(audioAsset.path);
-          const audio = `data:${getFileMimeType(audioAsset.path)};base64,${audioBuffer.toString('base64')}`;
+          const audioBuffer = await fs.promises.readFile(audioPath);
+          const audio = `data:${getFileMimeType(audioPath)};base64,${audioBuffer.toString('base64')}`;
           this.sendToRoom('get_audio', {audio, clipId: clip?.clipId});
         }
       } else {

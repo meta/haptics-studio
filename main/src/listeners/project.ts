@@ -8,7 +8,7 @@
 import {dialog} from 'electron';
 import fs from 'fs';
 import path from 'path';
-import {isEqual, cloneDeep} from 'lodash';
+import {isEmpty, isEqual, cloneDeep} from 'lodash';
 import {IpcInvokeChannel, IpcSendChannel} from '../../../shared';
 import {createIPCHandler, createIPCListener} from './ipcHandlerUtils';
 
@@ -215,6 +215,11 @@ function renameProject(): void {
         }
 
         // Rename the project file
+        const wasTrusted =
+          !isEmpty(currentProject.projectFile) &&
+          Configs.instance.isTrustedRecentProject(
+            currentProject.projectFile as string,
+          );
         if (
           currentProject.projectFile &&
           currentProjectFileExists &&
@@ -245,6 +250,9 @@ function renameProject(): void {
           projectToBeReplaced,
           projectToReplace,
         );
+        if (wasTrusted && renamedProject.projectFile) {
+          Configs.instance.trustRecentProject(renamedProject.projectFile);
+        }
 
         // Reload the menu items
         MainApplication.instance.reloadMenuItems();

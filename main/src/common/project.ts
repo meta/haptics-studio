@@ -607,6 +607,23 @@ export default class Project {
   };
 
   /**
+   * Removes the audio asset path from the given clips and persists the change
+   * @param {string[]} clipIds - The clip ids
+   */
+  public clearAudioAssetPaths = (clipIds: string[]): void => {
+    const ids = new Set(clipIds);
+    const clips = this.getClips().filter(
+      clip => ids.has(clip.clipId) && clip.audioAsset,
+    );
+    if (clips.length === 0) return;
+    for (const clip of clips) {
+      clip.audioAsset = {...clip.audioAsset, path: undefined};
+    }
+    this.setContentUpdatedAt();
+    this.persistToDisk();
+  };
+
+  /**
    * Duplicate a clip
    * @param {string} originalClipId - The orignial clip id
    * @param {string} clipId - The new clip id

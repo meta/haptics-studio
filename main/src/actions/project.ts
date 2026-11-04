@@ -21,6 +21,10 @@ import Project, {
   ClipMarker,
   OathSettings,
 } from '../common/project';
+import {
+  classifyAudioAssets,
+  ExternalAudioAsset,
+} from '../common/project/assetSecurity';
 import {IPCMessage} from '../listeners';
 import MainApplication from '../application';
 import {PathManager} from '../services';
@@ -181,6 +185,62 @@ function confirmProjectFileOverwrite(projectFile: string): boolean {
   return res === 0;
 }
 
+const MAX_LISTED_EXTERNAL_ASSETS = 10;
+
+/**
+ * Asks the user whether a project may use audio files located outside its folder.
+ * @param assets - The external audio assets
+ * @returns True when the user allows them
+ */
+function confirmExternalAudioAssets(assets: ExternalAudioAsset[]): boolean {
+  const window = MainApplication.instance.getMainWindow();
+  if (!window) {
+    return false;
+  }
+  const paths = [...new Set(assets.map(asset => asset.path))];
+  const listed = paths.slice(0, MAX_LISTED_EXTERNAL_ASSETS);
+  const remaining = paths.length - listed.length;
+  const fileList = [
+    ...listed,
+    ...(remaining > 0 ? [`…and ${remaining} more`] : []),
+  ].join('\n');
+  // res: 0 == 'Allow', 1 == "Don't Allow"
+  const res = dialog.showMessageBoxSync(window, {
+    type: 'warning',
+    title: '',
+    message: 'This project uses audio files from outside its folder',
+    detail: `${fileList}\n\nOnly allow if you trust where this project came from. Clips of files you don't allow are kept without audio.`,
+    buttons: ['Allow', "Don't Allow"],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  return res === 0;
+}
+
+/**
+ * Drops non-audio asset references from a freshly opened project and asks the
+ * user before keeping audio references that point outside the project folder,
+ * unless the project is a trusted recent project.
+ * @param projectFile - The opened project file
+ * @returns True when the user declined the external audio references
+ */
+function validateAudioAssets(projectFile: string): boolean {
+  const {nonAudio, external} = classifyAudioAssets(
+    Project.instance.getClips(),
+    projectFile,
+  );
+  const rejected = [...nonAudio];
+  const declined =
+    external.length > 0 &&
+    !Configs.instance.isTrustedRecentProject(projectFile) &&
+    !confirmExternalAudioAssets(external);
+  if (declined) {
+    rejected.push(...external.map(asset => asset.clipId));
+  }
+  Project.instance.clearAudioAssetPaths(rejected);
+  return declined;
+}
+
 /**
  * Save current project assets to destination
  * @param action - The action name
@@ -314,6 +374,7 @@ export async function saveProject(
 
     // Add the project to the recent list
     Configs.instance.addRecentProject({projectFile, name: projectName});
+    Configs.instance.trustRecentProject(projectFile);
 
     // Send Current Project to the HMD
     if (notifySocket) {
@@ -506,6 +567,15 @@ export async function loadProject(
       };
     }
 
+    let declinedAudioAssets = false;
+    if (
+      loadFromDisk &&
+      !Project.isTmpProject(projectFile) &&
+      !isSampleProject(projectFile)
+    ) {
+      declinedAudioAssets = validateAudioAssets(projectFile);
+    }
+
     let isSample = isSampleProject(projectFile);
     const isTutorial = isBuiltInTutorial(projectFile);
     const isAuthoringTutorial = isCustomTutorial(projectFile);
@@ -598,6 +668,9 @@ export async function loadProject(
 
       // Add the project to the recent list
       Configs.instance.addRecentProject({projectFile, name: projectName});
+      if (loadFromDisk && !declinedAudioAssets) {
+        Configs.instance.trustRecentProject(projectFile);
+      }
     }
 
     // when opening a sample project
@@ -760,6 +833,8 @@ export async function cloneProject(action: string): Promise<IPCMessage> {
     );
     // Save the clone project
     saveJSONFile(projectFile, omit(clonedContent, ['updatedAt']));
+    Configs.instance.addRecentProject({projectFile, name: projectName});
+    Configs.instance.trustRecentProject(projectFile);
 
     // Set the project dir as new home
     PathManager.instance.setPath('home', path.dirname(projectFile));

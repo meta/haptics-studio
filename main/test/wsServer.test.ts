@@ -19,11 +19,7 @@ import mockSvg from './mocks/svg';
 
 import Constants from '../src/common/constants';
 import WSServer from '../src/wsServer';
-import Project, {
-  Clip,
-  ClipGroup,
-  ProjectContent,
-} from '../src/common/project';
+import Project, {Clip, ClipGroup, ProjectContent} from '../src/common/project';
 import * as Utils from '../src/common/utils';
 import Configs from '../src/common/configs';
 import MainApplication from '../src/application';
@@ -360,6 +356,27 @@ describe('Websocket Server', () => {
           },
         );
         socket.emit('get_audio', {clipId: noAudioClipId, binary: true});
+      });
+
+      it.each([
+        ['a non-audio file', 'id_rsa'],
+        ['a non-audio file with an audio extension', 'fake.wav'],
+      ])('should not send %s', async (_label, fileName) => {
+        const filePath = path.join(samplesPath, '..', 'tmp', fileName);
+        fs.mkdirSync(path.dirname(filePath), {recursive: true});
+        fs.writeFileSync(filePath, 'secret');
+        Project.instance.loadContent({
+          ...projectFileContent,
+          clips: [{...clip, audioAsset: {path: filePath}}],
+        });
+        const res = await new Promise<{audio: Buffer | null; clipId: string}>(
+          resolve => {
+            socket.on('get_audio_binary', resolve);
+            socket.emit('get_audio', {clipId, binary: true});
+          },
+        );
+        fs.rmSync(filePath, {force: true});
+        expect(res).toMatchObject({clipId, audio: null});
       });
     });
 

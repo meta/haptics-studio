@@ -115,6 +115,36 @@ describe('ProtocolHandler', () => {
     expect(net.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects an audio-named symlink to a non-audio file', async () => {
+    const secretPath = path.join(path.dirname(root), 'outside.png');
+    const linkPath = path.join(path.dirname(root), 'user-audio.wav');
+    fs.writeFileSync(secretPath, 'secret');
+    fs.symlinkSync(secretPath, linkPath);
+    jest
+      .spyOn(Project.instance, 'getClips')
+      .mockReturnValue([{audioAsset: {path: linkPath}} as Clip]);
+
+    await handler({url: `media://${linkPath}`});
+
+    expect(net.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a referenced directory with an audio extension', async () => {
+    const dirPath = path.join(path.dirname(root), 'user-audio.wav');
+    fs.mkdirSync(dirPath);
+    jest
+      .spyOn(Project.instance, 'getClips')
+      .mockReturnValue([{audioAsset: {path: dirPath}} as Clip]);
+
+    try {
+      await handler({url: `media://${dirPath}`});
+    } finally {
+      fs.rmSync(dirPath, {recursive: true, force: true});
+    }
+
+    expect(net.fetch).not.toHaveBeenCalled();
+  });
+
   it('serves referenced user audio outside all known roots', async () => {
     const audioPath = path.join(path.dirname(root), 'user-audio.wav');
     fs.writeFileSync(audioPath, 'audio');

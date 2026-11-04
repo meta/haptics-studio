@@ -16,7 +16,6 @@
  */
 
 import path from 'path';
-import fs from 'fs';
 import {pathToFileURL} from 'url';
 import {net, protocol} from 'electron';
 
@@ -24,30 +23,17 @@ import Logger from '../common/logger';
 import Configs from '../common/configs';
 import Constants from '../common/constants';
 import Project from '../common/project';
+import {
+  getCanonicalPath,
+  isWithinRoot,
+  resolveAudioAssetPath,
+} from '../common/project/assetSecurity';
 import {isOnWindows} from '../common/utils';
 import PathManager from './PathManager';
 
 function normalizeForComparison(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
   return isOnWindows() ? normalizedPath.toLowerCase() : normalizedPath;
-}
-
-function isWithinRoot(filePath: string, root: string): boolean {
-  const relativePath = path.relative(root, filePath);
-  return (
-    relativePath === '' ||
-    (relativePath !== '..' &&
-      !relativePath.startsWith(`..${path.sep}`) &&
-      !path.isAbsolute(relativePath))
-  );
-}
-
-function getCanonicalPath(filePath: string): string | undefined {
-  try {
-    return fs.realpathSync(filePath);
-  } catch {
-    return undefined;
-  }
 }
 
 function getContainedCanonicalPath(
@@ -67,15 +53,7 @@ function getContainedCanonicalPath(
 }
 
 function isReferencedAudioAsset(filePath: string): boolean {
-  if (
-    !Constants.PROJECT.SUPPORTED_AUDIO_EXTENSIONS.includes(
-      path.extname(filePath).toLowerCase(),
-    )
-  ) {
-    return false;
-  }
-
-  const canonicalPath = getCanonicalPath(filePath);
+  const canonicalPath = resolveAudioAssetPath(filePath);
   if (!canonicalPath) {
     return false;
   }

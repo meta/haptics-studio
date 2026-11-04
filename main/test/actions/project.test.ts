@@ -195,6 +195,139 @@ describe('actions', () => {
           expect(Configs.instance.addRecentProject).toHaveBeenCalledTimes(0);
         });
       });
+
+      describe('with audio assets', () => {
+        const sampleAudio = path.join(__dirname, '..', 'samples', 'audio.wav');
+        const externalDir = path.join(projectMock.tmpPath, 'external');
+        const insideAudio = path.join(projectMock.projectDir, 'inside.wav');
+        const externalAudio = path.join(externalDir, 'outside.wav');
+        const secret = path.join(externalDir, 'id_rsa');
+        const clipIds = {
+          inside: faker.datatype.uuid(),
+          external: faker.datatype.uuid(),
+          secret: faker.datatype.uuid(),
+        };
+
+        const loadWithAssets = async (
+          assets: Partial<Record<keyof typeof clipIds, string>>,
+        ) => {
+          const content = lodash.cloneDeep(projectMock.defautProjectContent);
+          content.clips = Object.entries(assets).map(([key, assetPath]) => ({
+            ...lodash.cloneDeep(projectMock.clip),
+            clipId: clipIds[key as keyof typeof clipIds],
+            audioAsset: {path: assetPath},
+          }));
+          Project.instance.loadContent(content);
+          response = await Actions.loadProject(action, projectMock.projectFile);
+        };
+
+        const audioPathOf = (clipId: string) =>
+          Project.instance.getClipById(clipId)?.audioAsset?.path;
+
+        beforeEach(() => {
+          fs.mkdirSync(externalDir, {recursive: true});
+          fs.copyFileSync(sampleAudio, insideAudio);
+          fs.copyFileSync(sampleAudio, externalAudio);
+          fs.writeFileSync(secret, 'secret');
+          jest.spyOn(Project, 'isTmpProject').mockReturnValue(false);
+          jest
+            .spyOn(Configs.instance, 'getCurrentProject')
+            .mockReturnValue({} as unknown as CurrentProject);
+          jest
+            .spyOn(Configs.instance, 'isTrustedRecentProject')
+            .mockReturnValue(false);
+          jest.spyOn(Configs.instance, 'trustRecentProject').mockReturnValue();
+          jest
+            .spyOn(PathManager.instance, 'getResourcesPath')
+            .mockReturnValue(path.join(projectMock.tmpPath, 'resources'));
+          jest
+            .spyOn(MainApplication.instance, 'getMainWindow')
+            .mockReturnValue({} as unknown as BrowserWindow);
+          jest.spyOn(dialog, 'showMessageBoxSync').mockReturnValue(1);
+        });
+
+        afterEach(async () => {
+          await promisify(rimraf)(externalDir);
+        });
+
+        it('should keep audio inside the project folder without asking', async () => {
+          await loadWithAssets({inside: insideAudio});
+          expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+          expect(audioPathOf(clipIds.inside)).toEqual(insideAudio);
+        });
+
+        it('should drop non-audio assets without asking', async () => {
+          await loadWithAssets({inside: insideAudio, secret});
+          expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+          expect(audioPathOf(clipIds.secret)).toBeUndefined();
+          expect(audioPathOf(clipIds.inside)).toEqual(insideAudio);
+        });
+
+        it('should drop external audio when the user does not allow it', async () => {
+          await loadWithAssets({inside: insideAudio, external: externalAudio});
+          expect(dialog.showMessageBoxSync).toHaveBeenCalledTimes(1);
+          expect(audioPathOf(clipIds.external)).toBeUndefined();
+          expect(audioPathOf(clipIds.inside)).toEqual(insideAudio);
+          expect(response).toMatchObject({status: 'ok'});
+          const payload = response.payload as unknown as Actions.OpenPayload;
+          const externalClip = payload.clips.find(
+            c => c.clipId === clipIds.external,
+          );
+          expect(externalClip?.audio?.exists).toBe(false);
+        });
+
+        it('should keep external audio when the user allows it', async () => {
+          jest.spyOn(dialog, 'showMessageBoxSync').mockReturnValue(0);
+          await loadWithAssets({external: externalAudio});
+          expect(dialog.showMessageBoxSync).toHaveBeenCalledTimes(1);
+          expect(audioPathOf(clipIds.external)).toEqual(externalAudio);
+        });
+
+        it('should treat a symlink escaping the project folder as external', async () => {
+          const link = path.join(projectMock.projectDir, 'link.wav');
+          fs.symlinkSync(externalAudio, link);
+          await loadWithAssets({external: link});
+          expect(dialog.showMessageBoxSync).toHaveBeenCalledTimes(1);
+          expect(audioPathOf(clipIds.external)).toBeUndefined();
+        });
+
+        it('should drop an audio-named symlink to a non-audio file', async () => {
+          const link = path.join(projectMock.projectDir, 'secret.wav');
+          fs.symlinkSync(secret, link);
+          await loadWithAssets({secret: link});
+          expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+          expect(audioPathOf(clipIds.secret)).toBeUndefined();
+        });
+
+        it('should not trust the project when the user does not allow external audio', async () => {
+          await loadWithAssets({external: externalAudio});
+          expect(Configs.instance.trustRecentProject).not.toHaveBeenCalled();
+        });
+
+        it('should trust the project when the user allows external audio', async () => {
+          jest.spyOn(dialog, 'showMessageBoxSync').mockReturnValue(0);
+          await loadWithAssets({external: externalAudio});
+          expect(Configs.instance.trustRecentProject).toHaveBeenCalledWith(
+            projectMock.projectFile,
+          );
+        });
+
+        it('should keep external audio of a trusted recent project without asking', async () => {
+          jest
+            .spyOn(Configs.instance, 'isTrustedRecentProject')
+            .mockReturnValue(true);
+          await loadWithAssets({external: externalAudio, secret});
+          expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+          expect(audioPathOf(clipIds.external)).toEqual(externalAudio);
+          expect(audioPathOf(clipIds.secret)).toBeUndefined();
+        });
+
+        it('should not ask again when reopening the temporary project', async () => {
+          jest.spyOn(Project, 'isTmpProject').mockReturnValue(true);
+          await loadWithAssets({external: externalAudio});
+          expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+        });
+      });
     });
   });
 
@@ -922,6 +1055,8 @@ describe('actions', () => {
     describe('export with project packaging', () => {
       let zipPath: string;
       let response: IPCMessage;
+      const fakeAudioPath = path.join(projectMock.tmpDir, 'fake.wav');
+      const secretPath = path.join(projectMock.tmpDir, 'id_rsa');
 
       beforeEach(async () => {
         zipPath = path.join(exportDir, `${projectMock.name}.zip`);
@@ -955,9 +1090,12 @@ describe('actions', () => {
         fs.mkdirSync(path.dirname(audio1Path), {recursive: true});
         fs.mkdirSync(path.dirname(audio2Path), {recursive: true});
         fs.mkdirSync(path.dirname(audio3Path), {recursive: true});
-        fs.writeFileSync(audio1Path, 'audio1');
-        fs.writeFileSync(audio2Path, 'audio2');
-        fs.writeFileSync(audio3Path, 'audio3');
+        const sampleAudio = path.join(__dirname, '..', 'samples', 'audio.wav');
+        fs.copyFileSync(sampleAudio, audio1Path);
+        fs.copyFileSync(sampleAudio, audio2Path);
+        fs.copyFileSync(sampleAudio, audio3Path);
+        fs.writeFileSync(fakeAudioPath, 'not audio');
+        fs.writeFileSync(secretPath, 'secret');
 
         const clipsToExport = [
           {
@@ -982,6 +1120,22 @@ describe('actions', () => {
             settings: mockedSettings,
             haptic: projectMock.clip.haptic,
             audioAsset: {path: audio3Path, filename: 'audio'},
+            waveform: mockedSvg,
+          },
+          {
+            clipId: faker.datatype.uuid(),
+            name: faker.commerce.product(),
+            settings: mockedSettings,
+            haptic: projectMock.clip.haptic,
+            audioAsset: {path: fakeAudioPath, filename: 'audio'},
+            waveform: mockedSvg,
+          },
+          {
+            clipId: faker.datatype.uuid(),
+            name: faker.commerce.product(),
+            settings: mockedSettings,
+            haptic: projectMock.clip.haptic,
+            audioAsset: {path: secretPath, filename: 'audio'},
             waveform: mockedSvg,
           },
         ];
@@ -1037,6 +1191,11 @@ describe('actions', () => {
 
       it('should create a zip file', () => {
         expect(fs.existsSync(zipPath)).toBeTruthy();
+      });
+
+      it('should not package assets that are not audio files', () => {
+        expect(fs.existsSync(path.join(exportDir, 'fake.wav'))).toBeFalsy();
+        expect(fs.existsSync(path.join(exportDir, 'id_rsa'))).toBeFalsy();
       });
 
       it('should contain the project file in the package', () => {
