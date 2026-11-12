@@ -11871,7 +11871,7 @@ MonoBehaviour:
   shape: 0
   curveRadius: 1
   overlapMask: 0
-  overlayType: 2
+  overlayType: 1
   _overlayEnabled: 1
 --- !u!1 &1252343913
 GameObject:
