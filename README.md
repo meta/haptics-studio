@@ -520,6 +520,22 @@ The app stores configuration and logs in the following locations:
 | Windows     | `%APPDATA%/Haptics Studio/`                     |
 | Development | Same path with `-dev` suffix                    |
 
+### Experimental Features
+
+Experimental features are hidden by default. To enable them, place a `flags.json` file in the application data folder (see above) with the following format:
+
+```json
+{
+  "featureName": true
+}
+```
+
+The file is parsed at application launch only. When testing in development, put the file in `main/`.
+
+| Key    | Description                             |
+| :----: | :-------------------------------------: |
+| `pwle` | Enable the "Android PWLE" export format |
+
 ## Core Data Models
 
 ### Project File (.hasp)

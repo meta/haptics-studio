@@ -316,6 +316,22 @@ describe('Websocket Server', () => {
       });
     });
 
+    describe('on get android pwle', () => {
+      it('should send the control points and transients', done => {
+        socket.on('get_android_pwle', (res: {clipId: string}) => {
+          expect(res).toMatchObject({
+            clipId,
+            data: {
+              control_points: expect.any(Array),
+              transients: expect.any(Array),
+            },
+          });
+          done();
+        });
+        socket.emit('get_android_pwle', {clipId});
+      });
+    });
+
     describe('on get_audio', () => {
       it('should send the audio as a byte array when the binary parameter is true', done => {
         socket.on(

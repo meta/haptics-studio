@@ -12,7 +12,7 @@ import dgram from 'dgram';
 import _, {isEmpty, isNil, pick} from 'lodash';
 import {createServer, Server as HttpServer} from 'http';
 import {v4 as uuidv4} from 'uuid';
-import {hapticDataToSplitAhap} from './hapticsSdk';
+import {hapticDataToSplitAhap, getPwleControlPoints} from './hapticsSdk';
 
 import Logger from './common/logger';
 import Constants from './common/constants';
@@ -605,6 +605,25 @@ export default class WSServer {
         }
       },
     );
+
+    client.on('get_android_pwle', (args: {clipId: string; gain?: number}) => {
+      const {clipId = '', gain} = args;
+      const clip = Project.instance.getClipById(clipId);
+      if (clip) {
+        const {haptic} = clip;
+        if (haptic) {
+          const data = sanitizedEnvelopes(haptic);
+          if (data) {
+            try {
+              const pwleData = getPwleControlPoints(data, gain);
+              this.sendToRoom('get_android_pwle', {clipId, data: pwleData});
+            } catch (error) {
+              Logger.logError(error as Error);
+            }
+          }
+        }
+      }
+    });
   }
 
   private sendClip(action: string, clip?: Clip) {

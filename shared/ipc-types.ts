@@ -232,7 +232,12 @@ export interface ExternalAuditioningResponse {
 
 // -- Clips export -----------------------------------------------------------
 
-export type ExportFormat = 'ahap' | 'haptic' | 'wav' | 'android';
+export type ExportFormat =
+  | 'ahap'
+  | 'haptic'
+  | 'wav'
+  | 'android'
+  | 'android-pwle';
 
 export interface ExportClipsRequest {
   clips: string[];

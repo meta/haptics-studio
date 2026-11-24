@@ -10,6 +10,7 @@ import {
   isContentValid,
   validateJsonString,
   getAmplitudeAndTimingArrays,
+  getPwleControlPoints,
 } from '../src/hapticsSdk';
 import mockedDatamodel from '../test/mocks/datamodel';
 import {generateRandomClip} from './mocks/project';
@@ -78,6 +79,30 @@ describe('Haptics SDK', () => {
       expect(amplitudes.length).toBeGreaterThan(0);
       expect(Array.isArray(timings)).toBe(true);
       expect(timings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getPwleControlPoints', () => {
+    const clipMock = generateRandomClip({});
+
+    it('should return the control points and transients', () => {
+      const {control_points, transients} = getPwleControlPoints(
+        clipMock.haptic!,
+      );
+      expect(control_points.length).toBeGreaterThan(1);
+      expect(control_points[0].duration_ms).toBe(0);
+      expect(control_points[control_points.length - 1].amplitude).toBe(0);
+      expect(Array.isArray(transients)).toBe(true);
+    });
+
+    it('should scale the amplitudes with the gain', () => {
+      const full = getPwleControlPoints(clipMock.haptic!, 1);
+      const half = getPwleControlPoints(clipMock.haptic!, 0.5);
+      const maxAmplitude = (points: {amplitude: number}[]) =>
+        Math.max(...points.map(p => p.amplitude));
+      expect(maxAmplitude(half.control_points)).toBeLessThanOrEqual(
+        maxAmplitude(full.control_points),
+      );
     });
   });
 

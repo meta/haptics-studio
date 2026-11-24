@@ -30,6 +30,8 @@ import type {
   MetaData,
   Envelopes,
   TimeAmplitude,
+  PwleRenderSettings,
+  PwleEnvelope,
 } from './types/haptics_sdk_types';
 
 export type {
@@ -42,6 +44,7 @@ export type {
   MetaData,
   Envelopes,
   TimeAmplitude,
+  PwleEnvelope,
 };
 
 interface AudioData {}
@@ -65,6 +68,11 @@ export interface HapticsSdkNapi {
     settings: WaveformRenderSettings,
   ): Waveform;
   defaultWaveformRenderSettings(): WaveformRenderSettings;
+  renderHapticDataToPwle(
+    hapticData: HapticData,
+    settings: PwleRenderSettings,
+  ): PwleEnvelope;
+  defaultPwleRenderSettings(): PwleRenderSettings;
   hapticDataToSplitAhap(hapticData: HapticData): SplitAhap;
 }
 
@@ -332,4 +340,23 @@ export function getAmplitudeAndTimingArrays(
 
 export function hapticDataToSplitAhap(hapticData: HapticData): SplitAhap {
   return MainApplication.HapticsSdkNapi.hapticDataToSplitAhap(hapticData);
+}
+
+/**
+ * Get the PWLE control points from the haptic data
+ * @param hapticData the haptic data
+ * @param gain optional gain to apply to the amplitude values
+ */
+export function getPwleControlPoints(
+  hapticData: HapticData,
+  gain?: number,
+): PwleEnvelope {
+  const settings = MainApplication.HapticsSdkNapi.defaultPwleRenderSettings();
+  if (gain !== undefined) {
+    settings.gain = gain;
+  }
+  return MainApplication.HapticsSdkNapi.renderHapticDataToPwle(
+    hapticData,
+    settings,
+  );
 }

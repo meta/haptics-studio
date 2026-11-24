@@ -13,6 +13,7 @@ import path from 'path';
 import {
   executeRenderer,
   getAmplitudeAndTimingArrays,
+  getPwleControlPoints,
   hapticDataToSplitAhap,
   HapticData,
   MetaData,
@@ -98,6 +99,12 @@ export const exportContentWithFormats = (
           options.sampleRate,
         );
         fs.writeFileSync(filePath, JSON.stringify(data));
+        break;
+      }
+      case 'android-pwle': {
+        filePath = `${filename}.pwle.json`;
+        const pwleData = getPwleControlPoints(contentToExport, options.gain);
+        fs.writeFileSync(filePath, JSON.stringify(pwleData));
         break;
       }
       default:

@@ -1052,6 +1052,78 @@ describe('actions', () => {
       });
     });
 
+    describe('android pwle export', () => {
+      let response: IPCMessage;
+
+      beforeEach(async () => {
+        jest
+          .spyOn(Project.instance, 'getName')
+          .mockReturnValue(projectMock.name);
+        jest.spyOn(Configs.instance, 'getCurrentProject').mockReturnValue({
+          name: projectMock.name,
+          dirty: true,
+          tmpProjectFile: projectMock.tmpProjectFile,
+          projectFile: projectMock.projectFile,
+        });
+        jest
+          .spyOn(MainApplication.instance, 'getMainWindow')
+          .mockReturnValue({} as unknown as BrowserWindow);
+        jest.spyOn(dialog, 'showOpenDialogSync').mockReturnValue([exportDir]);
+
+        const clipToExport = {
+          clipId: faker.datatype.uuid(),
+          name: faker.commerce.product(),
+          settings: mockedSettings,
+          haptic: projectMock.clip.haptic,
+          audioAsset: undefined,
+          waveform: mockedSvg,
+        };
+        Project.instance.loadContent(
+          lodash.cloneDeep({
+            version: {major: 1, minor: 0, patch: 0},
+            metadata: {name: projectMock.name},
+            state: {
+              sessionId: projectMock.sessionId,
+              clipId: projectMock.clipId,
+            },
+            clips: [clipToExport],
+            groups: [],
+          }),
+        );
+
+        fs.mkdirSync(exportDir, {recursive: true});
+
+        response = (await ipcRenderer.invoke(testAction, {
+          clips: [clipToExport.clipId],
+          formats: ['android-pwle' as const],
+          packageProject: false,
+          flatten: false,
+        })) as IPCMessage;
+      });
+
+      afterEach(async () => {
+        const rm = promisify(rimraf);
+        await rm(exportDir);
+      });
+
+      it('should export a .pwle.json file with control points and transients', () => {
+        const pwleFile = fs
+          .readdirSync(exportDir)
+          .find(f => f.endsWith('.pwle.json'));
+        expect(pwleFile).toBeDefined();
+        const content = JSON.parse(
+          fs.readFileSync(path.join(exportDir, pwleFile!), 'utf-8'),
+        ) as {control_points: unknown[]; transients: unknown[]};
+        expect(content.control_points.length).toBeGreaterThan(1);
+        expect(Array.isArray(content.transients)).toBe(true);
+      });
+
+      it('should return ok status', () => {
+        expect(response.status).toEqual('ok');
+        expect(response.action).toEqual(testAction);
+      });
+    });
+
     describe('export with project packaging', () => {
       let zipPath: string;
       let response: IPCMessage;

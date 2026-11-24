@@ -13,6 +13,7 @@ import path from 'path';
 
 export interface CustomFlags {
   externalAudio?: boolean;
+  pwle?: boolean;
 }
 
 export function getCustomFlags(dataPath: string): CustomFlags {

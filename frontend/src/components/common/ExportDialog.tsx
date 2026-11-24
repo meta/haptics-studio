@@ -154,6 +154,9 @@ export default function ExportDialog(): JSX.Element {
     {value: 'ahap', label: '.ahap'},
     {value: 'wav', label: 'waveform'},
     {value: 'android', label: 'Android'},
+    ...(localStorage.getItem('flags:pwle') === 'true'
+      ? [{value: 'android-pwle' as const, label: 'Android PWLE'}]
+      : []),
   ];
 
   const [showInfoPanel, setShowInfoPanel] = useState<string | null>(null);
@@ -240,6 +243,8 @@ export default function ExportDialog(): JSX.Element {
         return lang('export.format-title-wav');
       case 'android':
         return lang('export.format-title-android');
+      case 'android-pwle':
+        return lang('export.format-title-android-pwle');
       default:
         return '';
     }
@@ -255,6 +260,8 @@ export default function ExportDialog(): JSX.Element {
         return lang('export.format-hint-wav');
       case 'android':
         return lang('export.format-hint-android');
+      case 'android-pwle':
+        return lang('export.format-hint-android-pwle');
       default:
         return '';
     }

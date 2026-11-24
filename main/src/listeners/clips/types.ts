@@ -18,7 +18,12 @@ export interface ExportPreviewMessage {
   sampleRate: number;
 }
 
-export type ExportFormat = 'ahap' | 'haptic' | 'wav' | 'android';
+export type ExportFormat =
+  | 'ahap'
+  | 'haptic'
+  | 'wav'
+  | 'android'
+  | 'android-pwle';
 
 export interface ExportMessage {
   clips: string[];
