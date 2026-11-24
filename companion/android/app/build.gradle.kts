@@ -13,7 +13,7 @@ plugins {
 
 android {
   namespace = "com.example.hapticsstudio"
-  compileSdk = 35
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.example.hapticsstudio"
@@ -67,4 +67,5 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.socket.io.client)
   debugImplementation(libs.androidx.ui.tooling)
+  testImplementation(libs.junit)
 }

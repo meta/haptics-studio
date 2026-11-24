@@ -10,7 +10,9 @@ package com.example.hapticsstudio.net
 import android.app.Application
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import com.example.hapticsstudio.model.AndroidPwle
 import com.example.hapticsstudio.model.AndroidWaveform
 import com.example.hapticsstudio.model.Project
 import com.example.hapticsstudio.model.SocketEndpoint
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
+
+private const val TAG = "ProjectViewModel"
 
 /**
  * Drives the connection to a single desktop endpoint: Socket.IO handshake, pairing-code auth,
@@ -70,7 +74,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
   fun playClip(clipId: String) {
     _currentPlayingClipId.value = clipId
-    socketClient.emit("get_android", JSONObject().put("clipId", clipId))
+    val event = if (hapticPlayer.supportsPwle) "get_android_pwle" else "get_android"
+    socketClient.emit(event, JSONObject().put("clipId", clipId))
   }
 
   private fun registerHandlers() {
@@ -127,14 +132,41 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
           playWaveform(clipId, waveform)
         },
     )
+
+    socketClient.on(
+        "get_android_pwle",
+        Emitter.Listener { args ->
+          val message = args.firstOrNull() as? JSONObject ?: return@Listener
+          val clipId = message.optString("clipId")
+          val data = message.optJSONObject("data") ?: return@Listener
+          playPwle(clipId, data)
+        },
+    )
+  }
+
+  private fun playPwle(clipId: String, data: JSONObject) {
+    val audioFile = if (audioCache.exists(clipId)) audioCache.audioFile(clipId) else null
+    val played =
+        try {
+          hapticPlayer.play(AndroidPwle.fromJson(data), audioFile) { clearPlaying(clipId) }
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to play PWLE for clip $clipId: ${e.message}")
+          false
+        }
+    if (!played && _currentPlayingClipId.value == clipId) {
+      // The "get_android" reply is played as a waveform and never requests anything else.
+      socketClient.emit("get_android", JSONObject().put("clipId", clipId))
+    }
   }
 
   private fun playWaveform(clipId: String, waveform: AndroidWaveform) {
     val audioFile = if (audioCache.exists(clipId)) audioCache.audioFile(clipId) else null
-    hapticPlayer.play(waveform, audioFile) {
-      if (_currentPlayingClipId.value == clipId) {
-        _currentPlayingClipId.value = null
-      }
+    hapticPlayer.play(waveform, audioFile) { clearPlaying(clipId) }
+  }
+
+  private fun clearPlaying(clipId: String) {
+    if (_currentPlayingClipId.value == clipId) {
+      _currentPlayingClipId.value = null
     }
   }
 

@@ -123,3 +123,35 @@ data class AndroidWaveform(
     }
   }
 }
+
+/**
+ * A pre-rendered Android envelope (PWLE) vibration. Each index holds the normalized [amplitudes]
+ * and [frequencies] (both 0-1) of a control point, and the [durationsMs] from the previous control
+ * point to it. Transient events sent by the desktop are ignored, since Android cannot play an
+ * envelope effect and a composition together.
+ */
+class AndroidPwle(
+    val amplitudes: FloatArray,
+    val frequencies: FloatArray,
+    val durationsMs: LongArray,
+) {
+  val size: Int
+    get() = amplitudes.size
+
+  companion object {
+    fun fromJson(data: JSONObject): AndroidPwle {
+      val points = data.optJSONArray("control_points")
+      val count = points?.length() ?: 0
+      val amplitudes = FloatArray(count)
+      val frequencies = FloatArray(count)
+      val durationsMs = LongArray(count)
+      for (i in 0 until count) {
+        val point = points!!.getJSONObject(i)
+        amplitudes[i] = point.getDouble("amplitude").toFloat().coerceIn(0f, 1f)
+        frequencies[i] = point.getDouble("frequency").toFloat().coerceIn(0f, 1f)
+        durationsMs[i] = point.getLong("duration_ms").coerceAtLeast(0L)
+      }
+      return AndroidPwle(amplitudes, frequencies, durationsMs)
+    }
+  }
+}
